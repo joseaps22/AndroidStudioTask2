@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Task2_secondSpace</string>
+    <string name="time_in_foreground">Time in foreground</string>
+    <string name="time_in_background">Time in background</string>
+</resources>
