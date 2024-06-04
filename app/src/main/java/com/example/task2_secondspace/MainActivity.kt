@@ -1,91 +1,69 @@
 package com.example.task2_secondspace
 
-import java.util.concurrent.TimeUnit
+import android.content.BroadcastReceiver
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.ServiceConnection
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
+import android.os.IBinder
+import android.util.Log
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import com.example.task2_secondspace.R.*
-
-
-var ElapsedTimeForeground = 0
-var ElapsedTimeBackground = 0
-
-var AppInForeground : Boolean = false
-
+import com.example.task2_secondspace.R.id
+import com.example.task2_secondspace.R.layout
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
 class MainActivity : AppCompatActivity() {
 
     //Text Views
-    lateinit var timePassedB: TextView
-    lateinit var timePassedF: TextView
+    private lateinit var timePassedB: TextView
+    private lateinit var timePassedF: TextView
+    private var appTimeCountHandler : TimeCountInterface? = null
+    private var isBound = false
+    private val coroutineScope = CoroutineScope(Dispatchers.Main)
 
-    //Event handlers
-    var mHandlerF : Handler? = null
-    var mHandlerB : Handler? = null
 
-
-    //Starting cyclic alarm for foreground and stopping background
-    private fun startFTimer()
-    {
-        mHandlerB?.removeCallbacks(chronometerB)
-        mHandlerF = Handler(Looper.getMainLooper())
-        chronometerF.run()
+    private val timePassedReceiver = object : BroadcastReceiver(){
+        override fun onReceive(context: Context?, intent: Intent?) {
+            timePassedF.text = intent?.getStringExtra("ForegroundTime")
+            timePassedB.text = intent?.getStringExtra("BackgroundTime")
+        }
     }
 
-    //Starting cyclic alarm for background and stopping foreground
-    private fun startBTimer()
-    {
-        mHandlerF?.removeCallbacks(chronometerF)
-        mHandlerB = Handler(Looper.getMainLooper())
-        chronometerB.run()
-    }
+    private fun startUpdatingTextViews(){
+        coroutineScope.launch {
 
-    //Receiving time in 100ms. Converting to chronometric time.
-    private fun getFormattedTime (@Suppress("SpellCheckingInspection") hundredms : Int) : String
-    {
-        var millis = hundredms * 100L
-        val minutes = TimeUnit.MILLISECONDS.toMinutes(millis)
-        millis -= TimeUnit.MINUTES.toMillis(minutes)
-        val seconds = TimeUnit.MILLISECONDS.toSeconds(millis)
-
-        val millisTruncated = (String.format("$hundredms")).takeLast(1)
-
-        return "${if (minutes < 10) "0" else ""} $minutes:" +
-                "${if (seconds < 10) "0" else ""} $seconds." +
-                millisTruncated
-    }
-
-    //Cyclic runnable for foreground time
-    private var chronometerF : Runnable = object : Runnable {
-        override fun run() {
-            try {
-                if(AppInForeground) {
-                    ElapsedTimeForeground++
-                    timePassedF.text = getFormattedTime(ElapsedTimeForeground)
-                }
-            } finally {
-                mHandlerF!!.postDelayed(this, 100L)
+            while (isBound)
+            {
+                appTimeCountHandler?.countTime()
+                delay(100)
             }
         }
     }
 
-    //Cyclic runnable for background time
-    private var chronometerB : Runnable = object : Runnable {
-        override fun run() {
-            try {
-                if(!AppInForeground) {
-                    ElapsedTimeBackground++
-                    timePassedB.text = getFormattedTime(ElapsedTimeBackground)
-                }
-            } finally {
-                mHandlerB!!.postDelayed(this, 100L)
-            }
+
+    private val serviceConnection = object : ServiceConnection{
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            isBound = true
+            appTimeCountHandler = TimeCountInterface.Stub.asInterface(service)
+            appTimeCountHandler?.setAppInForeground()
+            startUpdatingTextViews()
+            Log.d("MainActivity", "Service connected")
+            Log.d("MainActivity", "$isBound")
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            isBound = false
+
         }
     }
     
@@ -100,6 +78,13 @@ class MainActivity : AppCompatActivity() {
         timePassedB = findViewById(id.TimeNotOpened)
         timePassedF = findViewById(id.TimeOpened)
 
+        registerReceiver(timePassedReceiver, IntentFilter("com.example.app.UPDATE_TEXT"))
+
+        val intent = Intent(this, TimeCountService::class.java)
+        startService(intent)
+        bindService(intent,serviceConnection, Context.BIND_AUTO_CREATE )
+
+
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
@@ -111,15 +96,22 @@ class MainActivity : AppCompatActivity() {
     override fun onResume()
     {
         super.onResume()
-        AppInForeground = true
-        startFTimer()
+        appTimeCountHandler?.setAppInForeground()
     }
 
     //On pause (background)
     override fun onPause()
     {
         super.onPause()
-        AppInForeground = false
-        startBTimer()
+        appTimeCountHandler?.setAppInBackground()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if(isBound)
+        {
+            unbindService(serviceConnection)
+            isBound = false
+        }
     }
 }
