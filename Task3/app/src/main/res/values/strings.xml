@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">EmptyTask</string>
+    <string name="app_name">Task3</string>
+    <string name="time_since_boot">Time since boot:</string>
+    <string name="time">Time</string>
 </resources>

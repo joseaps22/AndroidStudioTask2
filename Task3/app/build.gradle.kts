@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.emptytask"
+    namespace = "com.example.task3"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.emptytask"
+        applicationId = "com.example.task3"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
@@ -32,6 +32,10 @@ android {
     }
     kotlinOptions {
         jvmTarget = "1.8"
+    }
+    buildFeatures{
+        viewBinding = true
+        aidl = true
     }
 }
 
